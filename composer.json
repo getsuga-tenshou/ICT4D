@@ -1,0 +1,10 @@
+{
+    "name": "tarikdincer/project",
+    "type": "project",
+    "autoload": {
+        "psr-4": {
+            "weatherInfo\\": "src/"
+        }
+    },
+    "require": {}
+}

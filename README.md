@@ -11,3 +11,12 @@ Make sure Heroku is installed!
 2. heroku login
 3. heroku create
 4. git push heroku main
+
+Phone Numbers & Addresses
+The following contact numbers and addresses are mapped to your application.
+
+Number Type	: Number
+USA Toll Free PIN Access (Voice Only):	(800) 289-5570 then PIN: 9996159750
+USA Domestic PIN Access (Voice Only):	(407) 386-2174 then PIN: 9996159750
+Skype VoIP:	+990009369996159750
+SIP VoIP:	sip:9996159750@sip.voxeo.net

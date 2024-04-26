@@ -115,21 +115,20 @@ echo '<?xml version="1.0" encoding="UTF-8"?>';
     <form id="languageSelection">
         <field name="languageChoice">
             <prompt>Select your language. For English, press 1. Pour le français, appuyez sur 2.</prompt>
-            <!-- Explicit DTMF grammar for language selection -->
-            <grammar xml:lang="en-US" type="application/grammar+voicexml">
+            <grammar xml:lang="en-US" root="languageChoice" type="application/grammar+voicexml">
                 <rule id="languageChoice" scope="public">
                     <one-of>
-                        <item dtmf="1">1</item> <!-- English -->
-                        <item dtmf="2">2</item> <!-- French -->
+                        <item dtmf="1">english</item>
+                        <item dtmf="2">french</item>
                     </one-of>
                 </rule>
             </grammar>
         </field>
         <filled>
-            <if cond="languageChoice == '1'">
+            <if cond="languageChoice == 'english'">
                 <goto next="#mainMenuEnglish"/>
             </if>
-            <elseif cond="languageChoice == '2'">
+            <elseif cond="languageChoice == 'french'">
                 <goto next="#mainMenuFrench"/>
             </elseif>
             <else>
@@ -141,12 +140,9 @@ echo '<?xml version="1.0" encoding="UTF-8"?>';
 
     <!-- Main Menu English -->
     <form id="mainMenuEnglish">
-        <block>
-            <prompt>Welcome to the Weather Voice Service. Please choose an option.</prompt>
-        </block>
         <field name="menuChoice">
-            <prompt>For Weather Forecast, press 1. For Wind Alerts, press 2. To return to the main menu at any time, press 0.</prompt>
-            <grammar xml:lang="en-US" type="application/grammar+voicexml">
+            <prompt>Welcome to the Weather Voice Service. Please choose an option. For Weather Forecast, press 1. For Wind Alerts, press 2. To return to the main menu at any time, press 0.</prompt>
+            <grammar xml:lang="en-US" root="menuChoice" type="application/grammar+voicexml">
                 <rule id="menuChoice" scope="public">
                     <one-of>
                         <item dtmf="1">1</item>
@@ -157,43 +153,33 @@ echo '<?xml version="1.0" encoding="UTF-8"?>';
             </grammar>
         </field>
         <filled>
-            <if cond="menuChoice == '1'">
-                <goto next="#weatherForecastEnglish"/>
-            </if>
-            <elseif cond="menuChoice == '2'">
-                <goto next="#windAlertsEnglish"/>
-            </elseif>
-            <else>
-                <prompt>Invalid option, please try again.</prompt>
-                <reprompt/>
-            </else>
+            <switch cond="menuChoice">
+                <case expr="'1'">
+                    <goto next="#weatherForecastEnglish"/>
+                </case>
+                <case expr="'2'">
+                    <goto next="#windAlertsEnglish"/>
+                </case>
+                <default>
+                    <goto next="#mainMenuEnglish"/>
+                </default>
+            </switch>
         </filled>
     </form>
 
     <!-- Weather Forecast English -->
     <form id="weatherForecastEnglish">
         <block>
-            <prompt expr="'Today's weather features a temperature of ' + weatherData.temperature + ' degrees Celsius, ' + (weatherData.rainfall > 0 ? 'with rainfall of ' + weatherData.rainfall + ' mm' : 'no rainfall') + ', and a wind speed of ' + weatherData.wind_speed + ' km per hour.'"></prompt>
-            <goto next="#mainMenuEnglish"/>
-        </block>
-    </form>
-
-    <!-- Wind Alerts English -->
-    <form id="windAlertsEnglish">
-        <block>
-            <prompt expr="'Current wind speed is ' + weatherData.wind_speed + ' km per hour.'"></prompt>
+            <prompt expr="'Today’s weather features a temperature of ' + weatherData.temperature + ' degrees Celsius, ' + (weatherData.rainfall > 0 ? 'with rainfall of ' + weatherData.rainfall + ' mm' : 'no rainfall') + ', and a wind speed of ' + weatherData.wind_speed + ' km per hour.'"></prompt>
             <goto next="#mainMenuEnglish"/>
         </block>
     </form>
 
     <!-- Main Menu French -->
     <form id="mainMenuFrench">
-        <block>
-            <prompt xml:lang="fr-FR">Bienvenue au Service Vocal Météo. Veuillez choisir une option.</prompt>
-        </block>
         <field name="menuChoice">
-            <prompt xml:lang="fr-FR">Pour la prévision météorologique, appuyez sur 1. Pour les alertes de vent, appuyez sur 2. Pour retourner au menu principal à tout moment, appuyez sur 0.</prompt>
-            <grammar xml:lang="fr-FR" type="application/grammar+voicexml">
+            <prompt xml:lang="fr-FR">Bienvenue au Service Vocal Météo. Veuillez choisir une option. Pour la prévision météorologique, appuyez sur 1. Pour les alertes de vent, appuyez sur 2. Pour retourner au menu principal à tout moment, appuyez sur 0.</prompt>
+            <grammar xml:lang="fr-FR" root="menuChoice" type="application/grammar+voicexml">
                 <rule id="menuChoice" scope="public">
                     <one-of>
                         <item dtmf="1">1</item>
@@ -204,31 +190,24 @@ echo '<?xml version="1.0" encoding="UTF-8"?>';
             </grammar>
         </field>
         <filled>
-            <if cond="menuChoice == '1'">
-                <goto next="#weatherForecastFrench"/>
-            </if>
-            <elseif cond="menuChoice == '2'">
-                <goto next="#windAlertsFrench"/>
-            </elseif>
-            <else>
-                <prompt xml:lang="fr-FR">Option invalide, veuillez réessayer.</prompt>
-                <reprompt/>
-            </else>
+            <switch cond="menuChoice">
+                <case expr="'1'">
+                    <goto next="#weatherForecastFrench"/>
+                </case>
+                <case expr="'2'">
+                    <goto next="#windAlertsFrench"/>
+                </case>
+                <default>
+                    <goto next="#mainMenuFrench"/>
+                </default>
+            </switch>
         </filled>
     </form>
 
     <!-- Weather Forecast French -->
     <form id="weatherForecastFrench">
         <block>
-            <prompt xml:lang="fr-FR" expr="'La météo d'aujourd'hui présente une température de ' + weatherData.temperature + ' degrés Celsius, ' + (weatherData.rainfall > 0 ? 'avec des précipitations de ' + weatherData.rainfall + ' mm' : 'sans précipitations') + ', et une vitesse du vent de ' + weatherData.wind_speed + ' kilomètres par heure.'"></prompt>
-            <goto next="#mainMenuFrench"/>
-        </block>
-    </form>
-
-    <!-- Wind Alerts French -->
-    <form id="windAlertsFrench">
-        <block>
-            <prompt xml:lang="fr-FR" expr="'La vitesse actuelle du vent est de ' + weatherData.wind_speed + ' kilomètres par heure.'"></prompt>
+            <prompt xml:lang="fr-FR" expr="'La météo d’aujourd’hui présente une température de ' + weatherData.temperature + ' degrés Celsius, ' + (weatherData.rainfall > 0 ? 'avec des précipitations de ' + weatherData.rainfall + ' mm' : 'sans précipitations') + ', et une vitesse du vent de ' + weatherData.wind_speed + ' kilomètres par heure.'"></prompt>
             <goto next="#mainMenuFrench"/>
         </block>
     </form>

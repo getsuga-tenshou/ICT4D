@@ -1,5 +1,5 @@
 <?php
-$api_url = 'https://api.openweathermap.org/data/2.5/onecall?lat=33.44&lon=-94.04&exclude=hourly,daily&appid=ea76187d3f9b6b33b8a0648cd9bd7236';
+$api_url = 'https://api.weatherapi.com/v1/current.json?q=18,-4&key=f53317d9afcf4cce844123315242604';
 
 $response = file_get_contents($api_url);
 
@@ -10,19 +10,24 @@ if ($response === false) {
 
 $data = json_decode($response, true);
 
-$temperature = $data['current']['temp'];
-$windspeed = $data['current']['wind_speed'];
-$rainfall = isset($data['current']['rain']) ? $data['current']['rain']['1h'] : 0;
+$lastUpdated = date('Y-m-d H:i:s', strtotime($data['current']['last_updated']));
+
+$location = $data['location']['name'];
+$temperature = $data['current']['temp_c'];
+$wind_speed = $data['current']['wind_kph'];
+$rainfall = $data['current']['precip_mm'];
 
 try {
-    $pdo = new PDO("mysql:host=your_host;dbname=your_database", "your_username", "your_password");
+    $pdo = new PDO("mysql:host=sql.freedb.tech;dbname=freedb_meteodb", "freedb_meteouser", "YdQnV8fT3%?wpZ&");
 
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    $stmt = $pdo->prepare("INSERT INTO weather_data (temperature, windspeed, rainfall) VALUES (:temperature, :windspeed, :rainfall)");
+    $stmt = $pdo->prepare("INSERT INTO report (date, location, temperature, wind_speed, rainfall) VALUES (:last_updated, :location, :temperature, :wind_speed, :rainfall)");
 
+    $stmt->bindParam(':last_updated', $lastUpdated);
+    $stmt->bindParam(':location', $location);
     $stmt->bindParam(':temperature', $temperature);
-    $stmt->bindParam(':windspeed', $windspeed);
+    $stmt->bindParam(':wind_speed', $wind_speed);
     $stmt->bindParam(':rainfall', $rainfall);
 
     $stmt->execute();

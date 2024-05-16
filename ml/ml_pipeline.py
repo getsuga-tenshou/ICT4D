@@ -13,27 +13,35 @@ def fetch_data():
         database="freedb_meteodb"
     )
     cursor = conn.cursor()
-    cursor.execute("SELECT DATE(date) as date, AVG(temperature) as temperature, AVG(rainfall) as rainfall, AVG(wind_speed) as wind_speed FROM report GROUP BY DATE(date)")
+    cursor.execute(
+        "SELECT date, temperature, rainfall, wind_speed FROM report")
     data = cursor.fetchall()
     conn.close()
     return data
 
+
+
 def prepare_data(data):
     df = pd.DataFrame(data, columns=['date', 'temperature', 'rainfall', 'wind_speed'])
     df.dropna(inplace=True)
-    
-    df['avg_temp'] = df['temperature'].expanding().mean()
-    df['avg_rain'] = df['rainfall'].expanding().mean()
-    df['avg_wind'] = df['wind_speed'].expanding().mean()
+
+    df['date'] = pd.to_datetime(df['date'])  # Convert 'date' column to datetime format
+    df['hour_of_day'] = df['date'].dt.hour
+
+    df['last_3_hour_avg_temp'] = df['temperature'].shift(1).rolling(window=3, min_periods=1).mean()
+    df['last_12_hour_avg_temp'] = df['temperature'].shift(1).rolling(window=12, min_periods=1).mean()
+    df['last_day_avg_temp'] = df['temperature'].shift(24).rolling(window=24, min_periods=1).mean()
 
     df.dropna(inplace=True)
 
-    X = df[['avg_temp', 'avg_rain', 'avg_wind']]
+    X = df[['last_3_hour_avg_temp', 'last_12_hour_avg_temp', 'last_day_avg_temp', 'hour_of_day']]
     y_temp = df['temperature']
     y_rain = df['rainfall']
     y_wind = df['wind_speed']
 
     return (X, y_temp), (X, y_rain), (X, y_wind)
+
+
 
 def train_models(X_y_pairs):
     models = []
@@ -44,7 +52,11 @@ def train_models(X_y_pairs):
         models.append(model)
     return models
 
+
 def insert_predictions(predictions, date, location):
+    print(predictions)
+    print(date)
+    print(location)
     conn = mysql.connector.connect(
         host="sql.freedb.tech",
         user="freedb_meteouser",
@@ -52,35 +64,46 @@ def insert_predictions(predictions, date, location):
         database="freedb_meteodb"
     )
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO report (temperature, rainfall, wind_speed, date, location, isAlert) VALUES (%s, %s, %s, %s, %s, %d)",
-                    (predictions[0], predictions[1], predictions[2], date, location, 0))
+    cursor.execute(
+        "INSERT INTO report (temperature, rainfall, wind_speed, date, location) VALUES (%s, %s, %s, %s, %s)",
+        (predictions[0], predictions[1], predictions[2], date, location))
     conn.commit()
     conn.close()
 
+
 if __name__ == "__main__":
     data = fetch_data()
+    # print(data)
     X_y_pairs = prepare_data(data)
+    # print('debug')
+    # print(X_y_pairs)
     models = train_models(X_y_pairs)
-    
-    # Predict and insert data for the next 24 hours
-    current_time = datetime.now()
+
+    current_time = datetime.now().replace(minute=0, second=0, microsecond=0)
     location = 'Araouan'
     for hour in range(24):
         prediction_time = current_time + timedelta(hours=hour)
-        avg_temp = X_y_pairs[0][0]['avg_temp'].iloc[-1]
-        avg_rain = X_y_pairs[0][0]['avg_rain'].iloc[-1]
-        avg_wind = X_y_pairs[0][0]['avg_wind'].iloc[-1]
-        
-        X_pred = pd.DataFrame([[avg_temp, avg_rain, avg_wind]], columns=['avg_temp', 'avg_rain', 'avg_wind'])
+
+        prediction_features = [
+            X_y_pairs[0][0]['last_3_hour_avg_temp'].iloc[-1],
+            X_y_pairs[0][0]['last_12_hour_avg_temp'].iloc[-1],
+            X_y_pairs[0][0]['last_day_avg_temp'].iloc[-1],
+            prediction_time.hour
+        ]
+
+        X_pred = pd.DataFrame([prediction_features],
+                              columns=[ 'last_3_hour_avg_temp',
+                                       'last_12_hour_avg_temp', 'last_day_avg_temp', 'hour_of_day'])
 
         predictions = []
         for model in models:
             prediction = model.predict(X_pred)
             predictions.append(float(prediction[0]))
-        
+
+        # Ensure rainfall and wind_speed predictions are non-negative
         predictions[1] = max(0, predictions[1])
         predictions[2] = max(0, predictions[2])
 
         insert_predictions(predictions, prediction_time.strftime('%Y-%m-%d %H:%M:%S'), location)
-    
+
     print("Weather predictions for the next 24 hours inserted successfully!")

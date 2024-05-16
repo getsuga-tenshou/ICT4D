@@ -77,6 +77,9 @@ if __name__ == "__main__":
         for model in models:
             prediction = model.predict(X_pred)
             predictions.append(float(prediction[0]))
+        
+        predictions[1] = max(0, predictions[1])
+        predictions[2] = max(0, predictions[2])
 
         insert_predictions(predictions, prediction_time.strftime('%Y-%m-%d %H:%M:%S'), location)
     

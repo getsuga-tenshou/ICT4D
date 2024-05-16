@@ -22,7 +22,15 @@ try {
 
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    $stmt = $pdo->prepare("INSERT INTO report (date, location, temperature, wind_speed, rainfall) VALUES (:last_updated, :location, :temperature, :wind_speed, :rainfall)");
+    $stmt = $pdo->prepare("
+        INSERT INTO report (date, location, temperature, wind_speed, rainfall, isAlert) 
+        VALUES (:last_updated, :location, :temperature, :wind_speed, :rainfall, 0)
+        ON DUPLICATE KEY UPDATE 
+            temperature = IF(isAlert = 0, VALUES(temperature), temperature),
+            wind_speed = IF(isAlert = 0, VALUES(wind_speed), wind_speed),
+            rainfall = IF(isAlert = 0, VALUES(rainfall), rainfall),
+            isAlert = IF(isAlert = 0, VALUES(isAlert), isAlert)
+    ");
 
     $stmt->bindParam(':last_updated', $lastUpdated);
     $stmt->bindParam(':location', $location);

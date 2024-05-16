@@ -2,8 +2,7 @@ import mysql.connector
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import accuracy_score
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 def fetch_data():
@@ -38,15 +37,12 @@ def prepare_data(data):
 
 def train_models(X_y_pairs):
     models = []
-    X_test_all, y_test_all = [], []
     for X, y in X_y_pairs:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         model = LinearRegression()
         model.fit(X_train, y_train)
         models.append(model)
-        X_test_all.append(X_test)
-        y_test_all.append(y_test)
-    return models, X_test_all, y_test_all
+    return models
 
 def insert_predictions(predictions, date, location):
     conn = mysql.connector.connect(
@@ -56,22 +52,32 @@ def insert_predictions(predictions, date, location):
         database="freedb_meteodb"
     )
     cursor = conn.cursor()
-    # print(predictions)
-    cursor.execute("INSERT INTO predictions (predicted_temp, predicted_rainfall, predicted_wind_speed, date, location) VALUES (%s, %s, %s, %s, %s)",
-                    (predictions[0], predictions[1], predictions[2], date, location))
+    cursor.execute("INSERT INTO report (temperature, rainfall, wind_speed, date, location, isAlert) VALUES (%s, %s, %s, %s, %s, %d)",
+                    (predictions[0], predictions[1], predictions[2], date, location, 0))
     conn.commit()
     conn.close()
 
 if __name__ == "__main__":
     data = fetch_data()
     X_y_pairs = prepare_data(data)
-    models, X_test_all, y_test_all = train_models(X_y_pairs)
-    predictions = []
-
-    for model, X_test, y_test in zip(models, X_test_all, y_test_all):
-        prediction = model.predict(X_test)
-        predictions.append(int(prediction[0]))
+    models = train_models(X_y_pairs)
     
-    date = datetime.now().strftime('%Y-%m-%d')
+    # Predict and insert data for the next 24 hours
+    current_time = datetime.now()
     location = 'Araouan'
-    insert_predictions(predictions, date, location)
+    for hour in range(24):
+        prediction_time = current_time + timedelta(hours=hour)
+        avg_temp = X_y_pairs[0][0]['avg_temp'].iloc[-1]
+        avg_rain = X_y_pairs[0][0]['avg_rain'].iloc[-1]
+        avg_wind = X_y_pairs[0][0]['avg_wind'].iloc[-1]
+        
+        X_pred = pd.DataFrame([[avg_temp, avg_rain, avg_wind]], columns=['avg_temp', 'avg_rain', 'avg_wind'])
+
+        predictions = []
+        for model in models:
+            prediction = model.predict(X_pred)
+            predictions.append(float(prediction[0]))
+
+        insert_predictions(predictions, prediction_time.strftime('%Y-%m-%d %H:%M:%S'), location)
+    
+    print("Weather predictions for the next 24 hours inserted successfully!")

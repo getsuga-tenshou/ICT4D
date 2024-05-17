@@ -96,7 +96,7 @@ echo '<?xml version="1.0" encoding="UTF-8"?>';
   <form id="mainMenu">
     <block>
       <prompt>
-        Welcome to our service. Press 1 for English, Press 2 for French.
+        Welcome to Meteo Weele. Press 1 for English, Press 2 for French.
       </prompt>
     </block>
     <field name="menuChoice">

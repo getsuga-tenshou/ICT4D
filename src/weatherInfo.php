@@ -96,17 +96,31 @@ echo '<?xml version="1.0" encoding="UTF-8"?>';
   <form id="mainMenu">
     <block>
       <prompt>
-        Welcome to Meteo Weele. Press 1 for English, Press 2 for French.
+        Welcome to our Meteo Weele. Press 1 for English, Press 2 for French.
       </prompt>
     </block>
     <field name="menuChoice">
       <grammar type="application/grammar+xml">
         <![CDATA[
           <grammar version="1.0" xml:lang="en-US" mode="dtmf">
-            <rule id="languageChoice" scope="public">
+            <rule id="main">
               <one-of>
-                <item dtmf="1">english</item>
-                <item dtmf="2">french</item>
+                <item>
+                  <ruleref uri="#english" />
+                </item>
+                <item>
+                  <ruleref uri="#french" />
+                </item>
+              </one-of>
+            </rule>
+            <rule id="english" scope="public">
+              <one-of>
+                <item>1</item>
+              </one-of>
+            </rule>
+            <rule id="french" scope="public">
+              <one-of>
+                <item>2</item>
               </one-of>
             </rule>
           </grammar>
@@ -123,10 +137,10 @@ echo '<?xml version="1.0" encoding="UTF-8"?>';
       </noinput>
     </field>
     <filled>
-      <if cond="menuChoice == 'english'">
+      <if cond="menuChoice == '1'">
         <goto next="#englishMenu" />
       </if>
-      <if cond="menuChoice == 'french'">
+      <if cond="menuChoice == '2'">
         <goto next="#frenchMenu" />
       </if>
     </filled>

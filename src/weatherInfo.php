@@ -1,4 +1,9 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// Database connection details
 $host = 'sql.freedb.tech';
 $dbname = 'freedb_meteodb';
 $username = 'freedb_meteouser';
@@ -11,252 +16,261 @@ try {
     die("Error: Could not connect. " . $e->getMessage());
 }
 
+// Get current server time in hours
+$currentHour = date('H');
+$currentDate = date('Y-m-d');
+
+// Fetch weather data for the current hour and the next three hours
+$query = "
+    SELECT date, temperature, wind_speed, rainfall, isAlert 
+    FROM report 
+    WHERE DATE(date) = :currentDate 
+    AND HOUR(date) BETWEEN :currentHour AND :nextHour";
+
 try {
-    $currentQuery = "SELECT temperature, wind_speed, rainfall FROM report WHERE date <= :currentTime ORDER BY date DESC LIMIT 1";
-    $stmt = $pdo->prepare($currentQuery);
-    $stmt->execute(['currentTime' => $currentTime]);
-    $currentWeatherData = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stmt = $pdo->prepare($query);
+    $stmt->execute([
+        ':currentDate' => $currentDate,
+        ':currentHour' => $currentHour,
+        ':nextHour' => $currentHour + 3
+    ]);
 
-    $averageQuery = "SELECT AVG(temperature) as avg_temperature, AVG(wind_speed) as avg_wind_speed, AVG(rainfall) as avg_rainfall FROM report WHERE date > :currentTime AND date <= :threeHoursLater";
-    $stmt = $pdo->prepare($averageQuery);
-    $stmt->execute(['currentTime' => $currentTime, 'threeHoursLater' => $threeHoursLater]);
-    $averageWeatherData = $stmt->fetch(PDO::FETCH_ASSOC);
-
+    $weatherData = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $stmt->closeCursor();
     $pdo = null;
 } catch (PDOException $e) {
     die("Error: Could not retrieve data. " . $e->getMessage());
 }
 
-$language = isset($_POST['language']) ? $_POST['language'] : 'english';
-$currentDateTime = new DateTime();
-$currentTime = $currentDateTime->format('Y-m-d H:i:s');
-$threeHoursLater = $currentDateTime->modify('+3 hours')->format('Y-m-d H:i:s');
-
-// $weatherData = array(
-//     'temperature' => 40,
-//     'rainfall' => 1.2,
-//     'windspeed' => 15
-// );
-
-function generatePrompt($currentWeatherData, $averageWeatherData, $language)
+function generateAlertPrompt($weatherData, $language)
 {
-    $currentTemperatureTextFr = $currentWeatherData['temperature'] . ' degrés Celsius.';
-    $currentRainfallTextFr = $currentWeatherData['rainfall'] ? 'Il pleut avec une quantité de ' . number_format($currentWeatherData['rainfall'], 1) . 'mm.' : 'Il ne pleut pas.';
-    $currentWindSpeedTextFr = $currentWeatherData['wind_speed'] . ' km/h.';
+    $alertText = '';
 
-    $currentTemperatureTextEn = $currentWeatherData['temperature'] . ' degrees Celsius.';
-    $currentRainfallTextEn = $currentWeatherData['rainfall'] ? 'It is raining with an amount of ' . number_format($currentWeatherData['rainfall'], 1) . 'mm.' : 'It is not raining.';
-    $currentWindSpeedTextEn = $currentWeatherData['wind_speed'] . ' km/h.';
-
-    $averageTemperatureTextFr = number_format($averageWeatherData['avg_temperature'], 1) . ' degrés Celsius.';
-    $averageRainfallTextFr = $averageWeatherData['avg_rainfall'] ? 'Il pleut avec une quantité moyenne de ' . number_format($averageWeatherData['avg_rainfall'], 1) . 'mm.' : 'Il ne pleut pas.';
-    $averageWindSpeedTextFr = number_format($averageWeatherData['avg_wind_speed'], 1) . ' km/h.';
-
-    $averageTemperatureTextEn = number_format($averageWeatherData['avg_temperature'], 1) . ' degrees Celsius.';
-    $averageRainfallTextEn = $averageWeatherData['avg_rainfall'] ? 'It is raining with an average amount of ' . number_format($averageWeatherData['avg_rainfall'], 1) . 'mm.' : 'It is not raining.';
-    $averageWindSpeedTextEn = number_format($averageWeatherData['avg_wind_speed'], 1) . ' km/h.';
-
-    $temperatureRanges = [
-        ['min' => -100, 'max' => 0, 'qualifier' => ($language === 'french') ? 'Il fait très froid.' : 'It is very cold.'],
-        ['min' => 0, 'max' => 10, 'qualifier' => ($language === 'french') ? 'Il fait froid.' : 'It is cold.'],
-        ['min' => 10, 'max' => 15, 'qualifier' => ($language === 'french') ? 'Il fait frais.' : 'It is cool.'],
-        ['min' => 15, 'max' => 25, 'qualifier' => ($language === 'french') ? 'Il fait doux.' : 'It is mild.'],
-        ['min' => 25, 'max' => 35, 'qualifier' => ($language === 'french') ? 'Il fait chaud.' : 'It is hot.'],
-        ['min' => 35, 'max' => 100, 'qualifier' => ($language === 'french') ? 'Il fait très chaud.' : 'It is very hot.'],
-    ];
-
-    $windSpeedRanges = [
-        ['min' => 0, 'max' => 10, 'qualifier' => ($language === 'french') ? 'Le vent est calme.' : 'The wind is calm.'],
-        ['min' => 10, 'max' => 20, 'qualifier' => ($language === 'french') ? 'Le vent est modéré.' : 'The wind is moderate.'],
-        ['min' => 20, 'max' => 30, 'qualifier' => ($language === 'french') ? 'Le vent est fort.' : 'The wind is strong.'],
-        ['min' => 30, 'max' => 100, 'qualifier' => ($language === 'french') ? 'Le vent est très fort.' : 'The wind is very strong.'],
-    ];
-
-    $rainfallRanges = [
-        ['min' => 0, 'max' => 0, 'qualifier' => ($language === 'french') ? 'Il ne pleut pas.' : 'It is not raining.'],
-        ['min' => 0.01, 'max' => 5, 'qualifier' => ($language === 'french') ? 'Il pleut légèrement.' : 'It is lightly raining.'],
-        ['min' => 5, 'max' => 10, 'qualifier' => ($language === 'french') ? 'Il pleut modérément.' : 'It is moderately raining.'],
-        ['min' => 10, 'max' => 20, 'qualifier' => ($language === 'french') ? 'Il pleut fortement.' : 'It is heavily raining.'],
-        ['min' => 20, 'max' => 100, 'qualifier' => ($language === 'french') ? 'Il pleut très fortement.' : 'It is raining very heavily.'],
-    ];
-
-    $currentTemperatureQualifier = '';
-    foreach ($temperatureRanges as $range) {
-        if ($currentWeatherData['temperature'] >= $range['min'] && $currentWeatherData['temperature'] < $range['max']) {
-            $currentTemperatureQualifier = $range['qualifier'];
+    foreach ($weatherData as $data) {
+        if ($data['isAlert'] == 1) {
+            if ($data['temperature'] > 40) {
+                $alertText .= $language === 'french' ? "<prompt xml:lang=\"fr-FR\">Alerte de vague de chaleur: La température est de " . $data['temperature'] . " degrés Celsius.</prompt>" : "<prompt>Heatwave alert: The temperature is " . $data['temperature'] . " degrees Celsius.</prompt>";
+            }
+            if ($data['rainfall'] > 200) {
+                $alertText .= $language === 'french' ? "<prompt xml:lang=\"fr-FR\">Alerte d'inondation éclair: Les précipitations sont de " . $data['rainfall'] . " millimètres.</prompt>" : "<prompt>Flash flood warning: The rainfall is " . $data['rainfall'] . " millimeters.</prompt>";
+            }
+            if ($data['wind_speed'] > 20) {
+                $alertText .= $language === 'french' ? "<prompt xml:lang=\"fr-FR\">Alerte de tempête: La vitesse du vent est de " . $data['wind_speed'] . " kilomètres par heure.</prompt>" : "<prompt>Storm warning: The wind speed is " . $data['wind_speed'] . " kilometers per hour.</prompt>";
+            }
             break;
         }
     }
 
-    $currentWindQualifier = '';
-    foreach ($windSpeedRanges as $range) {
-        if ($currentWeatherData['wind_speed'] >= $range['min'] && $currentWeatherData['wind_speed'] < $range['max']) {
-            $currentWindQualifier = $range['qualifier'];
-            break;
-        }
-    }
-
-    $currentRainfallQualifier = '';
-    foreach ($rainfallRanges as $range) {
-        if ($currentWeatherData['rainfall'] >= $range['min'] && $currentWeatherData['rainfall'] < $range['max']) {
-            $currentRainfallQualifier = $range['qualifier'];
-            break;
-        }
-    }
-
-    $averageTemperatureQualifier = '';
-    foreach ($temperatureRanges as $range) {
-        if ($averageWeatherData['avg_temperature'] >= $range['min'] && $averageWeatherData['avg_temperature'] < $range['max']) {
-            $averageTemperatureQualifier = $range['qualifier'];
-            break;
-        }
-    }
-
-    $averageWindQualifier = '';
-    foreach ($windSpeedRanges as $range) {
-        if ($averageWeatherData['avg_wind_speed'] >= $range['min'] && $averageWeatherData['avg_wind_speed'] < $range['max']) {
-            $averageWindQualifier = $range['qualifier'];
-            break;
-        }
-    }
-
-    $averageRainfallQualifier = '';
-    foreach ($rainfallRanges as $range) {
-        if ($averageWeatherData['avg_rainfall'] >= $range['min'] && $averageWeatherData['avg_rainfall'] < $range['max']) {
-            $averageRainfallQualifier = $range['qualifier'];
-            break;
-        }
-    }
-
-    $prompts = [];
-
-    if ($language === 'french') {
-        $prompts[] = "<prompt xml:lang=\"fr-fr\">La température actuelle est $currentTemperatureTextFr $currentTemperatureQualifier</prompt>";
-        $prompts[] = "<prompt xml:lang=\"fr-fr\">$currentRainfallTextFr $currentRainfallQualifier</prompt>";
-        $prompts[] = "<prompt xml:lang=\"fr-fr\">La vitesse du vent est $currentWindSpeedTextFr $currentWindQualifier</prompt>";
-
-        $prompts[] = "<prompt xml:lang=\"fr-fr\">La température moyenne pour les trois prochaines heures est $averageTemperatureTextFr $averageTemperatureQualifier</prompt>";
-        $prompts[] = "<prompt xml:lang=\"fr-fr\">$averageRainfallTextFr $averageRainfallQualifier</prompt>";
-        $prompts[] = "<prompt xml:lang=\"fr-fr\">La vitesse moyenne du vent pour les trois prochaines heures est $averageWindSpeedTextFr $averageWindQualifier</prompt>";
-    } else {
-        $prompts[] = "<prompt>Current temperature is $currentTemperatureTextEn $currentTemperatureQualifier</prompt>";
-        $prompts[] = "<prompt>$currentRainfallTextEn $currentRainfallQualifier</prompt>";
-        $prompts[] = "<prompt>Windspeed is $currentWindSpeedTextEn $currentWindQualifier</prompt>";
-
-        $prompts[] = "<prompt>The average temperature for the next three hours is $averageTemperatureTextEn $averageTemperatureQualifier</prompt>";
-        $prompts[] = "<prompt>$averageRainfallTextEn $averageRainfallQualifier</prompt>";
-        $prompts[] = "<prompt>The average windspeed for the next three hours is $averageWindSpeedTextEn $averageWindQualifier</prompt>";
-    }
-
-    return implode('', $prompts);
+    return $alertText;
 }
 
-$englishPrompt = generatePrompt($currentWeatherData, $averageWeatherData, 'english');
-$frenchPrompt = generatePrompt($currentWeatherData, $averageWeatherData, 'french');
+function generateWeatherForecastPrompt($weatherData, $language)
+{
+    $forecastText = '';
+    $hours = ['current', 'next', 'following', 'then'];
+
+    if ($language === 'french') {
+        $forecastText .= '<prompt xml:lang="fr-FR">Les températures pour les prochaines heures sont :</prompt>';
+    } else {
+        $forecastText .= '<prompt>The temperatures for the upcoming hours are:</prompt>';
+    }
+
+    foreach ($weatherData as $index => $data) {
+        $hourText = $index == 0 ? ($language === 'french' ? 'actuelle' : 'current') : "$hours[$index] hour";
+        $temperatureText = $language === 'french' ? "La température $hourText à " . date('H:i', strtotime($data['date'])) . " est " . $data['temperature'] . " degrés Celsius." : "The $hourText temperature at " . date('H:i', strtotime($data['date'])) . " is " . $data['temperature'] . " degrees Celsius.";
+        $forecastText .= "<prompt>$temperatureText</prompt>";
+    }
+
+    return $forecastText;
+}
+
+$language = isset($_POST['language']) ? $_POST['language'] : 'english';
+$alertPrompt = generateAlertPrompt($weatherData, $language);
+$weatherForecastPrompt = generateWeatherForecastPrompt($weatherData, $language);
 
 header('Content-Type: text/xml');
 echo '<?xml version="1.0" encoding="UTF-8"?>';
 ?>
 <vxml version="2.1">
-    <!-- Language Selection -->
-    <form id="languageSelection">
-        <field name="languageChoice">
-            <prompt>Select your language. For English, press 1. Pour le français, appuyez sur 2.</prompt>
-            <grammar xml:lang="en-US" root="languageChoice" type="application/grammar+voicexml">
-                <rule id="languageChoice" scope="public">
-                    <one-of>
-                        <item dtmf="1">english</item>
-                        <item dtmf="2">french</item>
-                    </one-of>
-                </rule>
-            </grammar>
-        </field>
-        <filled>
-            <if cond="languageChoice == 'english'">
-                <goto next="#mainMenuEnglish" />
-            </if>
-            <elseif cond="languageChoice == 'french'">
-                <goto next="#mainMenuFrench" />
-            </elseif>
-            <else>
-                <prompt>Invalid option, please try again.</prompt>
-                <reprompt />
-            </else>
-        </filled>
-    </form>
+  <!-- Main Menu for Language Selection -->
+  <form id="mainMenu">
+    <block>
+      <prompt>
+        Welcome to our service. Press 1 for English, Press 2 for French.
+      </prompt>
+    </block>
+    <field name="menuChoice">
+      <grammar type="application/grammar+xml">
+        <![CDATA[
+          <grammar version="1.0" xml:lang="en-US" mode="dtmf">
+            <rule id="languageChoice" scope="public">
+              <one-of>
+                <item dtmf="1">english</item>
+                <item dtmf="2">french</item>
+              </one-of>
+            </rule>
+          </grammar>
+        ]]>
+      </grammar>
+      <prompt>
+        Please press 1 for English or 2 for French.
+      </prompt>
+      <nomatch>
+        I'm sorry, I didn't understand. Please press 1 for English or 2 for French.
+      </nomatch>
+      <noinput>
+        I'm sorry, I didn't hear anything. Please press 1 for English or 2 for French.
+      </noinput>
+    </field>
+    <filled>
+      <if cond="menuChoice == 'english'">
+        <goto next="#englishMenu" />
+      </if>
+      <if cond="menuChoice == 'french'">
+        <goto next="#frenchMenu" />
+      </if>
+    </filled>
+  </form>
 
-    <!-- Main Menu English -->
-    <form id="mainMenuEnglish">
-        <field name="menuChoice">
-            <prompt>Welcome to the Weather Voice Service. Please choose an option. For Weather Forecast, press 1. For Wind Alerts, press 2. To return to the main menu at any time, press 0.</prompt>
-            <grammar xml:lang="en-US" root="menuChoice" type="application/grammar+voicexml">
-                <rule id="menuChoice" scope="public">
-                    <one-of>
-                        <item dtmf="1">1</item>
-                        <item dtmf="2">2</item>
-                        <item dtmf="0">0</item>
-                    </one-of>
-                </rule>
-            </grammar>
-        </field>
-        <filled>
-            <switch cond="menuChoice">
-                <case expr="'1'">
-                    <goto next="#weatherForecastEnglish" />
-                </case>
-                <case expr="'2'">
-                    <goto next="#windAlertsEnglish" />
-                </case>
-                <default>
-                    <goto next="#mainMenuEnglish" />
-                </default>
-            </switch>
-        </filled>
-    </form>
+  <!-- English Menu -->
+  <form id="englishMenu">
+    <block>
+      <?php echo $alertPrompt; ?>
+      <prompt>
+        Please choose an option. Press 1 for Weather Forecast, Press 2 for Wind Alerts, Press 3 for Rainfall Information.
+      </prompt>
+    </block>
+    <field name="englishChoice">
+      <grammar type="application/grammar+xml">
+        <![CDATA[
+          <grammar version="1.0" xml:lang="en-US" mode="dtmf">
+            <rule id="main">
+              <one-of>
+                <item>1</item>
+                <item>2</item>
+                <item>3</item>
+              </one-of>
+            </rule>
+          </grammar>
+        ]]>
+      </grammar>
+      <prompt>
+        Press 1 for Weather Forecast, Press 2 for Wind Alerts, Press 3 for Rainfall Information.
+      </prompt>
+      <nomatch>
+        I'm sorry, I didn't understand. Press 1 for Weather Forecast, Press 2 for Wind Alerts, Press 3 for Rainfall Information.
+      </nomatch>
+      <noinput>
+        I'm sorry, I didn't hear anything. Press 1 for Weather Forecast, Press 2 for Wind Alerts, Press 3 for Rainfall Information.
+      </noinput>
+    </field>
+    <filled>
+      <if cond="englishChoice == '1'">
+        <goto next="#weatherForecast" />
+      </if>
+      <if cond="englishChoice == '2'">
+        <goto next="#windAlerts" />
+      </if>
+      <if cond="englishChoice == '3'">
+        <goto next="#rainfallInfo" />
+      </if>
+    </filled>
+  </form>
 
-    <!-- Weather Forecast English -->
-    <form id="weatherForecastEnglish">
-        <block>
-            <prompt><?php echo $englishPrompt; ?></prompt>
-            <goto next="#mainMenuEnglish" />
-        </block>
-    </form>
+  <!-- French Menu -->
+  <form id="frenchMenu">
+    <block>
+      <?php echo $alertPrompt; ?>
+      <prompt>
+        Veuillez choisir une option. Appuyez sur 1 pour les prévisions météorologiques, Appuyez sur 2 pour les alertes de vent, Appuyez sur 3 pour les informations sur les précipitations.
+      </prompt>
+    </block>
+    <field name="frenchChoice">
+      <grammar type="application/grammar+xml">
+        <![CDATA[
+          <grammar version="1.0" xml:lang="fr-FR" mode="dtmf">
+            <rule id="main">
+              <one-of>
+                <item>1</item>
+                <item>2</item>
+                <item>3</item>
+              </one-of>
+            </rule>
+          </grammar>
+        ]]>
+      </grammar>
+      <prompt>
+        Appuyez sur 1 pour les prévisions météorologiques, Appuyez sur 2 pour les alertes de vent, Appuyez sur 3 pour les informations sur les précipitations.
+      </prompt>
+      <nomatch>
+        Désolé, je n'ai pas compris. Appuyez sur 1 pour les prévisions météorologiques, Appuyez sur 2 pour les alertes de vent, Appuyez sur 3 pour les informations sur les précipitations.
+      </nomatch>
+      <noinput>
+        Désolé, je n'ai rien entendu. Appuyez sur 1 pour les prévisions météorologiques, Appuyez sur 2 pour les alertes de vent, Appuyez sur 3 pour les informations sur les précipitations.
+      </noinput>
+    </field>
+    <filled>
+      <if cond="frenchChoice == '1'">
+        <goto next="#weatherForecast" />
+      </if>
+      <if cond="frenchChoice == '2'">
+        <goto next="#windAlerts" />
+      </if>
+      <if cond="frenchChoice == '3'">
+        <goto next="#rainfallInfo" />
+      </if>
+    </filled>
+  </form>
 
-    <!-- Main Menu French -->
-    <form id="mainMenuFrench">
-        <field name="menuChoice">
-            <prompt xml:lang="fr-FR">Bienvenue au Service Vocal Météo. Veuillez choisir une option. Pour la prévision météorologique, appuyez sur 1. Pour les alertes de vent, appuyez sur 2. Pour retourner au menu principal à tout moment, appuyez sur 0.</prompt>
-            <grammar xml:lang="fr-FR" root="menuChoice" type="application/grammar+voicexml">
-                <rule id="menuChoice" scope="public">
-                    <one-of>
-                        <item dtmf="1">1</item>
-                        <item dtmf="2">2</item>
-                        <item dtmf="0">0</item>
-                    </one-of>
-                </rule>
-            </grammar>
-        </field>
-        <filled>
-            <switch cond="menuChoice">
-                <case expr="'1'">
-                    <goto next="#weatherForecastFrench" />
-                </case>
-                <case expr="'2'">
-                    <goto next="#windAlertsFrench" />
-                </case>
-                <default>
-                    <goto next="#mainMenuFrench" />
-                </default>
-            </switch>
-        </filled>
-    </form>
+  <!-- Weather Forecast -->
+  <form id="weatherForecast">
+    <block>
+      <?php echo $weatherForecastPrompt; ?>
+      <exit/>
+    </block>
+  </form>
 
-    <!-- Weather Forecast French -->
-    <form id="weatherForecastFrench">
-        <block>
-            <prompt xml:lang="fr-FR"><?php echo $frenchPrompt; ?></prompt>
-            <goto next="#mainMenuFrench" />
-        </block>
-    </form>
+  <!-- Wind Alerts -->
+  <form id="windAlerts">
+    <block>
+      <prompt>
+        The current wind speed is <?php echo $weatherData[0]['wind_speed']; ?> kilometers per hour.
+        <?php
+        if ($weatherData[0]['wind_speed'] < 10) {
+            echo 'The wind is calm.';
+        } elseif ($weatherData[0]['wind_speed'] < 20) {
+            echo 'The wind is moderate.';
+        } elseif ($weatherData[0]['wind_speed'] < 30) {
+            echo 'The wind is strong.';
+        } else {
+            echo 'The wind is very strong.';
+        }
+        ?>
+      </prompt>
+      <exit/>
+    </block>
+  </form>
+
+  <!-- Rainfall Information -->
+  <form id="rainfallInfo">
+    <block>
+      <prompt>
+        The current rainfall amount is <?php echo $weatherData[0]['rainfall']; ?> millimeters.
+        <?php
+        if ($weatherData[0]['rainfall'] == 0) {
+            echo 'It is not raining.';
+        } elseif ($weatherData[0]['rainfall'] < 5) {
+            echo 'It is lightly raining.';
+        } elseif ($weatherData[0]['rainfall'] < 10) {
+            echo 'It is moderately raining.';
+        } elseif ($weatherData[0]['rainfall'] < 20) {
+            echo 'It is heavily raining.';
+        } else {
+            echo 'It is raining very heavily.';
+        }
+        ?>
+      </prompt>
+      <exit/>
+    </block>
+  </form>
 </vxml>

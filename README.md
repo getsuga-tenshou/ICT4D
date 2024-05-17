@@ -17,9 +17,9 @@ The following contact numbers and addresses are mapped to your application.
 
 Number Type	: Number
 
-USA Toll Free PIN Access (Voice Only):	(800) 289-5570 then PIN: 9996159750
+USA Toll Free PIN Access (Voice Only):	(800) 289-5570 then PIN: 9996100812
 
-USA Domestic PIN Access (Voice Only):	(407) 386-2174 then PIN: 9996159750
+USA Domestic PIN Access (Voice Only):	(407) 386-2174 then PIN: 9996100812
 
 Skype VoIP:	+990009369996159750
 

@@ -16,7 +16,7 @@ try {
     die("Error: Could not connect. " . $e->getMessage());
 }
 
-// Get current server time in hours
+// Get the current server time in hours
 $currentHour = date('H');
 $currentDate = date('Y-m-d');
 
